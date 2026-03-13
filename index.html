@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FUTURE STORE AR | PRO EDITION</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+
+    <style>
+        :root { --primary: #4f46e5; --bg: #f8fafc; --text: #1e293b; --card: #ffffff; }
+        .dark { --bg: #0f172a; --text: #f1f5f9; --card: #1e293b; }
+        body { background-color: var(--bg); color: var(--text); transition: 0.3s; font-family: 'Inter', sans-serif; overflow-x: hidden; touch-action: manipulation; }
+        
+        .admin-view { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 6000; overflow-y: auto; padding: 20px; color: #1e293b; }
+        .admin-view.active { display: block; }
+        .product-card { border-radius: 20px; background: var(--card); padding: 12px; position: relative; transition: 0.3s; border: 1px solid rgba(0,0,0,0.05); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .plus-btn { position: absolute; top: 10px; right: 10px; background: var(--primary); color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; z-index: 10; border: 2px solid white; }
+        
+        .wish-btn { position: absolute; top: 10px; right: 45px; background: white; color: #ff4757; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; z-index: 10; border: 1px solid #eee; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .wish-btn.active { background: #ff4757; color: white; }
+
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 5000; align-items: center; justify-content: center; padding: 15px; }
+        .modal.active { display: flex; }
+        
+        .ar-view { display: none; position: fixed; inset: 0; background: #000; z-index: 7000; }
+        .ar-view.active { display: block; }
+        #ar-canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 7001; }
+        #ar-item-render { position: absolute; pointer-events: none; z-index: 7002; display: none; transform-origin: center center; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        label { font-size: 10px; font-weight: bold; color: #4f46e5; text-transform: uppercase; margin-bottom: 2px; display: block; }
+        .rating-stars { color: #fbbf24; font-size: 12px; }
+        .discount-box { background: #eff6ff; border-radius: 15px; padding: 15px; border: 1px solid #dbeafe; margin: 10px 0; }
+        
+        .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .out-of-stock { filter: grayscale(1); opacity: 0.6; pointer-events: none !important; }
+        .stock-badge { position: absolute; top: 10px; left: 10px; background: red; color: white; padding: 2px 8px; border-radius: 10px; font-size: 8px; font-weight: bold; z-index: 11; }
+        
+        .best-seller-badge { position: absolute; top: 10px; left: 10px; background: #f59e0b; color: white; padding: 2px 8px; border-radius: 10px; font-size: 8px; font-weight: bold; z-index: 11; }
+        #sale-timer { font-family: monospace; background: rgba(0,0,0,0.2); padding: 2px 8px; border-radius: 5px; }
+        #ar-loading { position: absolute; inset: 0; background: rgba(0,0,0,0.8); color: white; display: flex; flex-direction: column; items: center; justify-content: center; z-index: 7010; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <a href="#" id="wa-link" target="_blank" class="fixed bottom-6 left-6 bg-[#25d366] text-white w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-xl z-40"><i class="fab fa-whatsapp"></i></a>
+
+    <nav class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md p-4 sticky top-0 z-50 flex flex-col gap-3">
+        <div class="flex justify-between items-center">
+            <h1 class="text-xl font-black italic text-indigo-600 uppercase">Future Store AR</h1>
+            <div class="flex gap-4 items-center">
+                <button onclick="document.documentElement.classList.toggle('dark')"><i class="fas fa-adjust text-xl"></i></button>
+                <button onclick="openTracker()" title="Track Order"><i class="fas fa-truck text-indigo-600 text-xl"></i></button>
+                <div class="relative cursor-pointer" onclick="openCart()">
+                    <i class="fas fa-shopping-bag text-indigo-600 text-xl"></i>
+                    <span id="cart-badge" class="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold hidden">0</span>
+                </div>
+                <button onclick="openAdmin()" class="bg-slate-800 text-white text-[10px] px-3 py-1 rounded-full font-bold">ADMIN</button>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <div class="relative flex-1">
+                <input type="text" id="search-bar" oninput="doSearch()" placeholder="Search products..." class="w-full bg-slate-100 dark:bg-slate-800 p-2 pl-10 rounded-xl text-sm outline-none border border-transparent focus:border-indigo-500 transition">
+                <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                <i onclick="startVoiceSearch()" class="fas fa-microphone absolute right-3 top-3 text-indigo-600 cursor-pointer"></i>
+            </div>
+            <button onclick="toggleStockFilter()" id="stock-flt-btn" class="bg-slate-100 dark:bg-slate-800 px-3 rounded-xl text-[10px] font-bold">ALL</button>
+        </div>
+        <div class="px-1">
+            <label class="!mb-0 !lowercase opacity-50">Price Filter: Rs <span id="price-val">5000</span></label>
+            <input type="range" id="price-range" min="0" max="10000" step="100" value="10000" oninput="doSearch()" class="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4">
+        <div class="bg-gradient-to-br from-indigo-600 to-purple-600 rounded-[30px] p-8 text-white mb-8 shadow-xl relative overflow-hidden">
+            <h2 id="bt" class="text-3xl font-black mb-1 uppercase text-white">NEW COLLECTION</h2>
+            <p id="bs" class="text-sm opacity-90 text-white">Experience Virtual AR Try-On</p>
+            <div class="mt-4 text-[12px] font-bold">
+                <span id="sale-timer-label">Flash Sale:</span> <span id="sale-timer">00:00:00</span>
+            </div>
+        </div>
+        <div id="category-tabs" class="flex gap-3 overflow-x-auto pb-4 no-scrollbar mb-4"></div>
+        <div id="product-grid" class="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div class="skeleton h-64 rounded-[30px]"></div>
+            <div class="skeleton h-64 rounded-[30px]"></div>
+        </div>
+    </div>
+
+    <div id="tracker-modal" class="modal">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-[30px] w-full max-w-md">
+            <h2 class="text-xl font-black mb-4 uppercase">Track Your Order</h2>
+            <input type="text" id="track-id" placeholder="Enter Order ID (e.g. #FS-1234)" class="w-full p-3 border rounded-xl mb-4 dark:bg-slate-700">
+            <button onclick="trackNow()" class="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold uppercase">Check Status</button>
+            <div id="track-res" class="mt-4 p-4 rounded-xl hidden"></div>
+            <button onclick="closeTracker()" class="w-full text-slate-400 text-[10px] mt-4 font-bold">CLOSE</button>
+        </div>
+    </div>
+
+    <div id="product-modal" class="modal">
+        <div class="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[30px] overflow-hidden relative max-h-[90vh] flex flex-col">
+            <button onclick="closeProduct()" class="absolute top-4 right-4 z-10 bg-black/20 text-white w-8 h-8 rounded-full"><i class="fas fa-times"></i></button>
+            <div class="overflow-y-auto">
+                <img id="m-img" class="w-full h-80 object-cover">
+                <div class="p-6">
+                    <div class="flex justify-between items-start mb-2">
+                        <h2 id="m-name" class="text-2xl font-black uppercase"></h2>
+                        <div id="m-rating" class="rating-stars"></div>
+                    </div>
+                    <div class="flex items-center gap-3 mb-6">
+                        <p id="m-price" class="text-2xl text-indigo-600 font-black"></p>
+                        <p id="m-old-price" class="text-sm text-slate-400 line-through"></p>
+                    </div>
+                    <div class="flex gap-3 mb-8">
+                        <button id="m-add-btn" class="flex-1 bg-indigo-600 text-white py-4 rounded-xl font-black shadow-lg uppercase">Buy Now / Add to Cart</button>
+                    </div>
+                    <div class="border-t pt-4">
+                        <h3 class="font-bold mb-3 uppercase text-xs text-slate-400 tracking-widest">Customer Reviews</h3>
+                        <div id="m-reviews" class="space-y-3 mb-6"></div>
+                        <div class="flex gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-2xl">
+                            <input id="rev-name" placeholder="Name" class="w-24 p-2 text-xs border-none bg-transparent outline-none">
+                            <input id="rev-txt" placeholder="Add a comment..." class="flex-1 p-2 text-xs border-none bg-transparent outline-none">
+                            <button onclick="addReview()" class="bg-indigo-600 text-white px-4 rounded-xl text-xs font-bold">Post</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="admin-view" class="admin-view">
+        <div class="max-w-4xl mx-auto bg-white p-6 rounded-[30px] shadow-2xl min-h-screen">
+            <div class="flex justify-between items-center mb-8">
+                <h2 class="text-2xl font-black text-indigo-600 uppercase">Admin Dashboard</h2>
+                <button onclick="closeAdmin()" class="bg-red-500 text-white px-6 py-2 rounded-xl font-bold text-xs shadow-lg">EXIT</button>
+            </div>
+            
+            <div class="flex gap-2 mb-8 overflow-x-auto no-scrollbar border-b pb-4">
+                <button onclick="showTab('set')" class="adm-t px-6 py-2 bg-indigo-600 text-white rounded-full text-[10px] font-bold">SETTINGS</button>
+                <button onclick="showTab('bulk')" class="adm-t px-6 py-2 bg-slate-100 rounded-full text-[10px] font-bold">BULK FOLDER</button>
+                <button onclick="showTab('single')" class="adm-t px-6 py-2 bg-slate-100 rounded-full text-[10px] font-bold">SINGLE ADD</button>
+                <button onclick="showTab('ord')" class="adm-t px-6 py-2 bg-slate-100 rounded-full text-[10px] font-bold">NEW ORDERS</button>
+                <button onclick="showTab('man')" class="adm-t px-6 py-2 bg-slate-100 rounded-full text-[10px] font-bold">MANAGE</button>
+            </div>
+
+            <div id="tab-content">
+                <div id="t-set" class="t-page space-y-4">
+                    <div><label>WhatsApp Number</label><input type="text" id="wa-num" class="w-full p-3 border rounded-xl"></div>
+                    <div><label>Admin Password</label><input type="text" id="a-pass" class="w-full p-3 border rounded-xl"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Sale End Time</label><input type="datetime-local" id="sale-end" class="w-full p-3 border rounded-xl"></div>
+                        <div><label>Promo Code (e.g NEW10)</label><input type="text" id="p-code" class="w-full p-3 border rounded-xl"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Promo Discount (RS)</label><input type="number" id="p-amt" class="w-full p-3 border rounded-xl"></div>
+                        <div><label>Delivery Fee (RS)</label><input type="number" id="d-fee" class="w-full p-3 border rounded-xl"></div>
+                    </div>
+                    <div class="discount-box space-y-3">
+                        <span class="text-[10px] font-bold text-indigo-600 uppercase">Auto Bulk Discount</span>
+                        <div><label>Min Items</label><input type="number" id="min-dis" class="w-full p-3 border rounded-xl"></div>
+                        <div><label>Discount RS</label><input type="number" id="dis-amt" class="w-full p-3 border rounded-xl"></div>
+                    </div>
+                    <div><label>JazzCash Details</label><input type="text" id="jc-det" class="w-full p-3 border rounded-xl"></div>
+                    <div><label>EasyPaisa Details</label><input type="text" id="ep-det" class="w-full p-3 border rounded-xl"></div>
+                    <div><label>Banner Title</label><input type="text" id="b-tit" class="w-full p-3 border rounded-xl"></div>
+                    <div><label>Banner Subtext</label><input type="text" id="b-sub" class="w-full p-3 border rounded-xl"></div>
+                    <button onclick="saveSet()" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-black uppercase">Save Settings</button>
+                </div>
+
+                <div id="t-single" class="t-page hidden space-y-4">
+                    <div><label>Product Name</label><input type="text" id="s-name" class="w-full p-3 border rounded-xl"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Original Price (RS)</label><input type="number" id="s-price" class="w-full p-3 border rounded-xl"></div>
+                        <div><label>Discount Price (RS)</label><input type="number" id="s-dis" class="w-full p-3 border rounded-xl"></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label>Category</label><input type="text" id="s-cat" class="w-full p-3 border rounded-xl"></div>
+                        <div><label>Stock Quantity</label><input type="number" id="s-stock" class="w-full p-3 border rounded-xl" value="10"></div>
+                    </div>
+                    <div class="flex items-center gap-2 p-2 bg-slate-50 rounded-xl">
+                        <input type="checkbox" id="s-best" class="w-4 h-4"> <label class="!mb-0">Mark as Best Seller</label>
+                    </div>
+                    <div><label>Product Image</label><input type="file" id="s-img" accept="image/*" class="w-full p-2 text-xs"></div>
+                    <button onclick="addSingle()" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-black uppercase">Add Product</button>
+                </div>
+
+                <div id="t-bulk" class="t-page hidden space-y-4">
+                    <textarea id="bulk-in" rows="6" class="w-full p-4 border rounded-xl font-mono text-xs" placeholder="Name, Price, Category, Stars"></textarea>
+                    <input type="file" id="bulk-files" multiple accept="image/*" class="w-full p-2">
+                    <button onclick="doBulkUpload()" class="w-full bg-green-600 text-white py-4 rounded-xl font-black">Bulk Upload</button>
+                </div>
+
+                <div id="t-ord" class="t-page hidden"><div id="order-logs" class="space-y-3"></div></div>
+                <div id="t-man" class="t-page hidden"><div id="manage-list" class="space-y-2"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="ar-overlay" class="ar-view">
+        <div id="ar-loading"><i class="fas fa-spinner fa-spin text-3xl mb-2"></i>Initializing AI Engine...</div>
+        <div id="ar-capture-area" class="w-full h-full relative overflow-hidden">
+            <video id="ar-vid" autoplay playsinline class="hidden"></video>
+            <canvas id="ar-canvas"></canvas>
+            <img id="ar-item-render" src="" alt="AR Item">
+        </div>
+        <div class="absolute bottom-24 left-0 right-0 flex flex-col items-center gap-4 z-[7005]">
+            <div class="flex gap-4 items-center">
+                <input type="color" id="ar-picker" oninput="applyARColor()" class="w-12 h-12 rounded-full border-2 border-white cursor-pointer" value="#ff0000">
+                <button onclick="takeSnap()" class="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg"><i class="fas fa-camera text-2xl text-indigo-600"></i></button>
+            </div>
+            <button onclick="stopAR()" class="bg-red-600 text-white px-12 py-3 rounded-full font-black uppercase">Exit AR</button>
+        </div>
+    </div>
+
+    <div id="cart-modal" class="modal">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-[30px] w-full max-w-md relative overflow-y-auto max-h-[90vh]">
+            <h2 class="text-xl font-black mb-6 uppercase">My Shopping Bag</h2>
+            <div id="cart-items-list" class="space-y-3 mb-6 max-h-60 overflow-y-auto no-scrollbar"></div>
+            
+            <div class="space-y-2 border-t pt-4">
+                <h4 class="text-xs font-bold uppercase text-indigo-600 mb-2">Promo Code</h4>
+                <div class="flex gap-2">
+                    <input type="text" id="c-promo" placeholder="Enter Code" class="flex-1 p-2 border rounded-xl dark:bg-slate-700 text-xs">
+                    <button onclick="applyPromo()" class="bg-slate-800 text-white px-4 rounded-xl text-xs font-bold">Apply</button>
+                </div>
+            </div>
+
+            <div class="space-y-2 border-t pt-4 mt-4">
+                <h4 class="text-xs font-bold uppercase text-indigo-600 mb-2">Shipping Details</h4>
+                <input type="text" id="c-name" placeholder="Full Name" class="w-full p-3 border rounded-xl dark:bg-slate-700">
+                <input type="text" id="c-ph" placeholder="WhatsApp Number" class="w-full p-3 border rounded-xl dark:bg-slate-700">
+                <textarea id="c-ad" placeholder="Full Address" class="w-full p-3 border rounded-xl h-20 dark:bg-slate-700"></textarea>
+            </div>
+            
+            <div class="space-y-2 border-t pt-4 mt-4">
+                <h4 class="text-xs font-bold uppercase text-indigo-600 mb-2">Payment Receipt (screenshot)</h4>
+                <div class="bg-slate-100 dark:bg-slate-900 p-4 rounded-xl text-[10px] mb-2 font-mono">
+                    Pay Total to:<br>
+                    JazzCash: <span id="cart-jc"></span><br>
+                    EasyPaisa: <span id="cart-ep"></span>
+                </div>
+                <input type="file" id="c-receipt" accept="image/*" class="w-full p-2 text-xs bg-slate-50 rounded-xl">
+            </div>
+
+            <div id="bill" class="bg-indigo-50 dark:bg-slate-900 p-4 rounded-xl text-xs font-mono mt-4"></div>
+            <button onclick="orderWA()" class="w-full bg-indigo-600 text-white py-4 rounded-xl font-black uppercase mt-4 shadow-lg"><i class="fab fa-whatsapp mr-2"></i>Order on WhatsApp</button>
+            <button onclick="closeCart()" class="w-full text-slate-400 text-[10px] font-bold mt-3 uppercase">Back</button>
+        </div>
+    </div>
+
+    <script>
+        let db = JSON.parse(localStorage.getItem('future_v3_db')) || {
+            config: { pass: "admin", wa: "923069423453", del: 200, bt: "NEW COLLECTION", bs: "Experience Virtual AR Try-On", minDis: 3, disAmt: 500, jc: "03001234567", ep: "03007654321", saleEnd: "", promoCode: "", promoAmt: 0 },
+            products: [], orders: []
+        };
+        let cart = JSON.parse(localStorage.getItem('future_cart')) || [];
+        let wishlist = JSON.parse(localStorage.getItem('future_wishlist')) || [];
+        let activeP = null, hideOutOfStock = false, appliedPromo = 0, arActiveCategory = 'All';
+
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+
+        const catIcons = { 'All': 'fa-th-large', 'Jewellery': 'fa-gem', 'Makeup': 'fa-magic', 'Shirt': 'fa-tshirt', 'Kurta': 'fa-vest', 'Clothes': 'fa-socks' };
+
+        function render(f = 'All') {
+            document.getElementById('bt').innerText = db.config.bt;
+            document.getElementById('bs').innerText = db.config.bs;
+            document.getElementById('wa-link').href = `https://wa.me/${db.config.wa}`;
+            const cats = ['All', ...new Set(db.products.map(p => p.cat))];
+            
+            document.getElementById('category-tabs').innerHTML = cats.map(c => {
+                const icon = catIcons[c] || 'fa-tag';
+                return `<button onclick="render('${c}')" class="px-6 py-2 flex items-center gap-2 ${f===c?'bg-indigo-600 text-white':'bg-white dark:bg-slate-800'} rounded-full text-xs font-bold whitespace-nowrap shadow-sm border border-transparent"><i class="fas ${icon}"></i> ${c}</button>`
+            }).join('');
+
+            let filtered = db.products.filter(p => f === 'All' || p.cat === f);
+            if(hideOutOfStock) filtered = filtered.filter(p => p.stock > 0);
+            const maxP = document.getElementById('price-range').value;
+            document.getElementById('price-val').innerText = maxP;
+            filtered = filtered.filter(p => (p.disPrice || p.price) <= maxP);
+            
+            document.getElementById('product-grid').innerHTML = filtered.map(p => {
+                const isOutOfStock = p.stock !== undefined && p.stock <= 0;
+                const bestSeller = p.isBest ? `<div class="best-seller-badge">BEST SELLER</div>` : '';
+                const inWish = wishlist.includes(p.id) ? 'active' : '';
+                return `
+                <div class="product-card ${isOutOfStock ? 'out-of-stock' : ''}" onclick="openProduct(${p.id})">
+                    ${isOutOfStock ? '<div class="stock-badge">OUT OF STOCK</div>' : bestSeller + `
+                    <div class="wish-btn ${inWish}" onclick="event.stopPropagation(); toggleWish(${p.id})"><i class="fas fa-heart"></i></div>
+                    <div class="plus-btn" onclick="event.stopPropagation(); addToCart(${p.id})"><i class="fas fa-plus"></i></div>`}
+                    <img src="${p.img}" class="w-full h-44 object-cover rounded-2xl mb-3 shadow-inner">
+                    <div class="rating-stars mb-1">${'★'.repeat(p.rating || 5)}</div>
+                    <h3 class="font-bold text-[11px] truncate uppercase">${p.name}</h3>
+                    <p class="text-indigo-600 font-black text-sm">Rs ${p.disPrice || p.price}</p>
+                    <button onclick="event.stopPropagation(); startAR('${p.img}', '${p.cat}')" class="w-full bg-slate-900 text-white py-2 rounded-xl text-[10px] font-black uppercase mt-3">Try On</button>
+                </div>`}).join('');
+            updateBadge();
+        }
+
+        function toggleWish(id) {
+            const idx = wishlist.indexOf(id);
+            if(idx === -1) wishlist.push(id); else wishlist.splice(idx, 1);
+            localStorage.setItem('future_wishlist', JSON.stringify(wishlist));
+            render();
+        }
+
+        function openTracker() { document.getElementById('tracker-modal').classList.add('active'); }
+        function closeTracker() { document.getElementById('tracker-modal').classList.remove('active'); document.getElementById('track-res').classList.add('hidden'); }
+        
+        function trackNow() {
+            const id = document.getElementById('track-id').value.toUpperCase();
+            const order = db.orders.find(o => o.id === id);
+            const res = document.getElementById('track-res');
+            res.classList.remove('hidden');
+            if(order) {
+                res.className = "mt-4 p-4 rounded-xl bg-green-100 text-green-800 text-xs font-bold";
+                res.innerHTML = `Order Found! <br> Status: ${order.status || 'Processing'} <br> Customer: ${order.cust}`;
+            } else {
+                res.className = "mt-4 p-4 rounded-xl bg-red-100 text-red-800 text-xs font-bold";
+                res.innerHTML = "Order ID not found.";
+            }
+        }
+
+        function startVoiceSearch() {
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = 'en-US'; recognition.start();
+            recognition.onresult = (event) => { 
+                const cmd = event.results[0][0].transcript.toLowerCase();
+                if(cmd.includes("open cart")) { openCart(); }
+                else if(cmd.includes("admin")) { openAdmin(); }
+                else if(cmd.includes("dark")) { document.documentElement.classList.add('dark'); }
+                else if(cmd.includes("light")) { document.documentElement.classList.remove('dark'); }
+                else { document.getElementById('search-bar').value = cmd; doSearch(); }
+            };
+        }
+
+        const videoElement = document.getElementById('ar-vid'), canvasElement = document.getElementById('ar-canvas'), canvasCtx = canvasElement.getContext('2d'), arItemImg = document.getElementById('ar-item-render');
+        let holistic = null, camera = null, currentColor = "#ff0000";
+
+        async function initAR() {
+            if(holistic) return;
+            holistic = new Holistic({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`});
+            holistic.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, refineFaceLandmarks: true });
+            holistic.onResults(onARResults);
+            camera = new Camera(videoElement, { onFrame: async () => await holistic.send({image: videoElement}), width: 640, height: 480 });
+        }
+
+        function onARResults(results) {
+            document.getElementById('ar-loading').style.display = 'none';
+            canvasElement.width = videoElement.videoWidth; canvasElement.height = videoElement.videoHeight;
+            canvasCtx.save(); 
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+            const cat = arActiveCategory.toLowerCase();
+            if ((cat.includes('cloth') || cat.includes('shirt') || cat.includes('kurta')) && results.poseLandmarks) {
+                arItemImg.style.display = 'block';
+                const leftSh = results.poseLandmarks[11], rightSh = results.poseLandmarks[12];
+                const width = Math.abs(leftSh.x - rightSh.x) * canvasElement.clientWidth * 2.5;
+                arItemImg.style.width = width + 'px';
+                arItemImg.style.left = ((1 - (leftSh.x + rightSh.x)/2) * canvasElement.clientWidth - width/2) + 'px';
+                arItemImg.style.top = (leftSh.y * canvasElement.clientHeight - 20) + 'px';
+            } 
+            else if (results.faceLandmarks) {
+                if (cat.includes('lipstick')) { arItemImg.style.display = 'none'; drawLipstick(results.faceLandmarks); } 
+                else if (cat.includes('jewellery') || cat.includes('earring')) { arItemImg.style.display = 'block'; positionEarring(results.faceLandmarks); } 
+                else { arItemImg.style.display = 'block'; positionGeneric(results.faceLandmarks); }
+            } else { arItemImg.style.display = 'none'; }
+            canvasCtx.restore();
+        }
+
+        function drawLipstick(landmarks) {
+            const lips = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 172, 58, 61];
+            canvasCtx.beginPath();
+            lips.forEach((idx, i) => { const pt = landmarks[idx]; if (i === 0) canvasCtx.moveTo(pt.x * canvasElement.width, pt.y * canvasElement.height); else canvasCtx.lineTo(pt.x * canvasElement.width, pt.y * canvasElement.height); });
+            canvasCtx.fillStyle = currentColor + "B3"; canvasCtx.fill();
+        }
+
+        function positionEarring(landmarks) {
+            const ear = landmarks[234]; const eyeDist = Math.hypot(landmarks[33].x - landmarks[263].x, landmarks[33].y - landmarks[263].y) * canvasElement.width;
+            arItemImg.style.width = (eyeDist * 0.75) + 'px'; arItemImg.style.left = ((1 - ear.x) * canvasElement.clientWidth - 20) + 'px'; arItemImg.style.top = (ear.y * canvasElement.clientHeight) + 'px';
+        }
+
+        function positionGeneric(landmarks) {
+            const nose = landmarks[168], left = landmarks[130], right = landmarks[359];
+            const w = Math.hypot(right.x-left.x, right.y-left.y) * canvasElement.clientWidth * 2.5;
+            arItemImg.style.width = w + 'px'; arItemImg.style.left = ((1 - nose.x) * canvasElement.clientWidth - w/2) + 'px'; arItemImg.style.top = (nose.y * canvasElement.clientHeight - w*0.3) + 'px';
+        }
+
+        async function startAR(img, cat) {
+            arActiveCategory = cat; arItemImg.src = img;
+            document.getElementById('ar-overlay').classList.add('active');
+            document.getElementById('ar-loading').style.display = 'flex';
+            try { await initAR(); await camera.start(); } catch (e) { alert("Camera Error."); stopAR(); }
+        }
+
+        function stopAR() { if(camera) camera.stop(); document.getElementById('ar-overlay').classList.remove('active'); arItemImg.style.display = 'none'; }
+        function applyARColor() { currentColor = document.getElementById('ar-picker').value; arItemImg.style.filter = `drop-shadow(0 0 5px ${currentColor}) brightness(1.1)`; }
+        
+        async function takeSnap() {
+            html2canvas(document.getElementById('ar-capture-area')).then(canvas => {
+                const link = document.createElement('a'); link.download = 'FutureStoreAR_Snap.png';
+                link.href = canvas.toDataURL(); link.click();
+                confetti({ particleCount: 100, spread: 70 });
+            });
+        }
+
+        function startTimer() {
+            setInterval(() => {
+                if(!db.config.saleEnd) return;
+                const end = new Date(db.config.saleEnd).getTime(); const now = new Date().getTime(); const dist = end - now;
+                if(dist < 0) { document.getElementById('sale-timer').innerText = "EXPIRED"; return; }
+                const h = Math.floor((dist % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)), m = Math.floor((dist % (1000 * 60 * 60)) / (1000 * 60)), s = Math.floor((dist % (1000 * 60)) / 1000);
+                document.getElementById('sale-timer').innerText = `${h}:${m}:${s}`;
+            }, 1000);
+        }
+
+        function toggleStockFilter() { hideOutOfStock = !hideOutOfStock; document.getElementById('stock-flt-btn').innerText = hideOutOfStock ? "IN STOCK" : "ALL"; render(); }
+
+        function openProduct(id) {
+            activeP = db.products.find(x => x.id === id); if(activeP.stock <= 0) return;
+            document.getElementById('m-img').src = activeP.img;
+            document.getElementById('m-name').innerText = activeP.name;
+            document.getElementById('m-price').innerText = `Rs ${activeP.disPrice || activeP.price}`;
+            document.getElementById('m-old-price').innerText = activeP.disPrice ? `Rs ${activeP.price}` : "";
+            document.getElementById('m-rating').innerHTML = '★'.repeat(activeP.rating || 5);
+            document.getElementById('m-add-btn').onclick = () => { addToCart(activeP.id); closeProduct(); openCart(); };
+            renderReviews(); document.getElementById('product-modal').classList.add('active');
+        }
+
+        function renderReviews() {
+            const box = document.getElementById('m-reviews'); const revs = activeP.reviews || [];
+            box.innerHTML = revs.length ? revs.map(r => `<div class="bg-slate-50 p-3 rounded-2xl border-l-4 border-indigo-400"><span class="font-black text-indigo-600 text-[10px] uppercase">${r.name}</span><p class="text-[11px] text-slate-500">${r.txt}</p></div>`).join('') : '<p class="text-xs text-center text-slate-400">No reviews.</p>';
+        }
+
+        function addReview() {
+            const n = document.getElementById('rev-name').value, t = document.getElementById('rev-txt').value;
+            if(!n || !t) return; if(!activeP.reviews) activeP.reviews = [];
+            activeP.reviews.push({ name: n, txt: t }); sync(); renderReviews();
+            document.getElementById('rev-txt').value = "";
+        }
+
+        async function addSingle() {
+            const n = document.getElementById('s-name').value, p = document.getElementById('s-price').value, d = document.getElementById('s-dis').value, c = document.getElementById('s-cat').value, st = document.getElementById('s-stock').value, best = document.getElementById('s-best').checked, file = document.getElementById('s-img').files[0];
+            if(!n || !p || !c || !file) return alert("Fill all details!");
+            const b64 = await new Promise(r => { const fr = new FileReader(); fr.onloadend = () => r(fr.result); fr.readAsDataURL(file); });
+            db.products.push({ id: Date.now(), name: n, price: parseInt(p), disPrice: d ? parseInt(d) : null, cat: c, stock: parseInt(st), isBest: best, rating: 5, img: b64, reviews: [] });
+            sync(); render(); alert("Added!");
+        }
+
+        async function doBulkUpload() {
+            const files = document.getElementById('bulk-files').files, lines = document.getElementById('bulk-in').value.trim().split('\n');
+            if(files.length !== lines.length) return alert("Mismatch!");
+            for(let i=0; i<files.length; i++) {
+                const b64 = await new Promise(r => { const fr = new FileReader(); fr.onloadend = () => r(fr.result); fr.readAsDataURL(files[i]); });
+                const [n, p, c, s] = lines[i].split(',').map(x => x.trim());
+                db.products.push({ id: Date.now()+i, name: n, price: parseInt(p), cat: c||"New", stock: 10, isBest: false, rating: parseInt(s)||5, img: b64, reviews: [] });
+            }
+            sync(); render(); alert("Bulk Success!");
+        }
+
+        function addToCart(id) {
+            let p = db.products.find(x => x.id === id); if(p.stock <= 0) return alert("Out of stock!");
+            let ex = cart.find(x => x.id === id); let price = p.disPrice || p.price;
+            if(ex) ex.qty++; else cart.push({...p, price: price, qty: 1});
+            confetti({ particleCount: 50, spread: 70, origin: { y: 0.9 } });
+            localStorage.setItem('future_cart', JSON.stringify(cart)); updateBadge();
+        }
+
+        function updateBadge() { const b = document.getElementById('cart-badge'); let count = cart.reduce((t, x) => t + x.qty, 0); b.innerText = count; b.classList.toggle('hidden', count === 0); }
+
+        function openCart() {
+            if(!cart.length) return alert("Cart empty!"); appliedPromo = 0;
+            document.getElementById('cart-items-list').innerHTML = cart.map((i, idx) => `
+                <div class="flex justify-between items-center bg-slate-50 p-3 rounded-2xl">
+                    <div class="flex items-center gap-3"><img src="${i.img}" class="w-12 h-12 rounded-xl object-cover"><div><p class="text-[10px] font-black uppercase truncate w-24">${i.name}</p><p class="text-indigo-600 font-bold text-xs">Rs ${i.price}</p></div></div>
+                    <div class="flex items-center gap-2"><button onclick="chQty(${idx},-1)" class="w-7 h-7 bg-white rounded border">-</button><span class="text-xs font-bold w-4 text-center">${i.qty}</span><button onclick="chQty(${idx},1)" class="w-7 h-7 bg-white rounded border">+</button></div>
+                </div>`).join('');
+            calcBill(); 
+            document.getElementById('cart-jc').innerText = db.config.jc;
+            document.getElementById('cart-ep').innerText = db.config.ep;
+            document.getElementById('cart-modal').classList.add('active');
+        }
+
+        function applyPromo() {
+            const code = document.getElementById('c-promo').value.trim();
+            if(code === db.config.promoCode && db.config.promoCode !== "") { appliedPromo = parseInt(db.config.promoAmt); alert("Promo Applied!"); calcBill(); } else { alert("Invalid Promo Code"); }
+        }
+
+        function chQty(idx, d) { cart[idx].qty += d; if(cart[idx].qty <= 0) cart.splice(idx,1); localStorage.setItem('future_cart', JSON.stringify(cart)); if(!cart.length) closeCart(); else openCart(); updateBadge(); }
+
+        function calcBill() {
+            const sub = cart.reduce((t, x) => t + (x.price * x.qty), 0);
+            let dis = (cart.length >= db.config.minDis) ? db.config.disAmt : 0;
+            const total = sub + parseInt(db.config.del) - dis - appliedPromo;
+            document.getElementById('bill').innerHTML = `Sub: Rs ${sub}<br>Ship: Rs ${db.config.del}<br>Disc: Rs ${dis}<br>Promo: Rs ${appliedPromo}<br><b>Total: Rs ${total}</b>`;
+        }
+
+        async function orderWA() {
+            const n = document.getElementById('c-name').value, ph = document.getElementById('c-ph').value, ad = document.getElementById('c-ad').value, recFiles = document.getElementById('c-receipt').files;
+            if(!n || !ph || !ad) return alert("Shipping details missing!");
+            if(recFiles.length === 0) return alert("Upload Payment Receipt!");
+            const orderID = "#FS-" + Math.floor(1000 + Math.random() * 9000);
+            const items = cart.map(i => `- ${i.name} [x${i.qty}]`).join('%0A');
+            db.orders.unshift({ id: orderID, date: new Date().toLocaleDateString(), cust: n, item: `${cart.length} Items`, status: 'Pending' });
+            sync(); window.open(`https://wa.me/${db.config.wa}?text=*ORDER ID: ${orderID}*%0A${items}%0A%0ACustomer: ${n}%0APhone: ${ph}%0AAddress: ${ad}`);
+            cart = []; localStorage.removeItem('future_cart'); updateBadge(); closeCart(); render();
+        }
+
+        function sync() { localStorage.setItem('future_v3_db', JSON.stringify(db)); }
+        
+        // --- ADMIN SECURITY START ---
+        function openAdmin() { 
+            // Tabhi khulega jab sahi password enter hoga
+            let passInput = prompt("Enter Admin Password:"); 
+            if(passInput === db.config.pass) { 
+                document.getElementById('admin-view').classList.add('active'); 
+                loadSet(); 
+            } else {
+                alert("Incorrect Password! Access Denied.");
+            }
+        }
+        // --- ADMIN SECURITY END ---
+
+        function closeAdmin() { document.getElementById('admin-view').classList.remove('active'); }
+        function closeProduct() { document.getElementById('product-modal').classList.remove('active'); }
+        function closeCart() { document.getElementById('cart-modal').classList.remove('active'); }
+        
+        function showTab(t) {
+            document.querySelectorAll('.t-page').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.adm-t').forEach(b => { b.classList.replace('bg-indigo-600', 'bg-slate-100'); b.classList.remove('text-white'); });
+            event.target.classList.replace('bg-slate-100', 'bg-indigo-600'); event.target.classList.add('text-white');
+            document.getElementById('t-'+t).classList.remove('hidden');
+            if(t==='man') document.getElementById('manage-list').innerHTML = db.products.map(p => `<div class="p-3 border-b flex justify-between text-[10px] items-center"><span>${p.name} (Stock: ${p.stock || 0})</span><div class="flex gap-2"><button onclick="updateStock(${p.id}, 5)" class="text-green-500 font-bold">+5</button><button onclick="delP(${p.id})" class="text-red-500">Del</button></div></div>`).join('');
+            if(t==='ord') document.getElementById('order-logs').innerHTML = db.orders.map(o => `<div class="p-4 bg-indigo-50 rounded-2xl text-[10px] border-l-4 border-indigo-600 flex justify-between items-center"><div>ID: ${o.id}<br>${o.date}: ${o.cust}</div> <button onclick="updateOrderStatus('${o.id}')" class="bg-indigo-600 text-white px-2 py-1 rounded">Update</button></div>`).join('');
+        }
+
+        function updateOrderStatus(id) { 
+            const o = db.orders.find(x => x.id === id); 
+            const s = prompt("Status (Pending/Shipped/Delivered):", o.status);
+            if(s) { o.status = s; sync(); showTab('ord'); }
+        }
+
+        function updateStock(id, amt) { let p = db.products.find(x => x.id === id); p.stock = (p.stock || 0) + amt; sync(); showTab('man'); render(); }
+        function loadSet() {
+            document.getElementById('wa-num').value = db.config.wa; document.getElementById('a-pass').value = db.config.pass;
+            document.getElementById('d-fee').value = db.config.del; document.getElementById('min-dis').value = db.config.minDis;
+            document.getElementById('dis-amt').value = db.config.disAmt; document.getElementById('jc-det').value = db.config.jc;
+            document.getElementById('ep-det').value = db.config.ep; document.getElementById('b-tit').value = db.config.bt;
+            document.getElementById('b-sub').value = db.config.bs; document.getElementById('sale-end').value = db.config.saleEnd || "";
+            document.getElementById('p-code').value = db.config.promoCode || ""; document.getElementById('p-amt').value = db.config.promoAmt || 0;
+        }
+
+        function saveSet() {
+            db.config.wa = document.getElementById('wa-num').value; db.config.pass = document.getElementById('a-pass').value;
+            db.config.del = document.getElementById('d-fee').value; db.config.minDis = document.getElementById('min-dis').value;
+            db.config.disAmt = document.getElementById('dis-amt').value; db.config.jc = document.getElementById('jc-det').value;
+            db.config.ep = document.getElementById('ep-det').value; db.config.bt = document.getElementById('b-tit').value;
+            db.config.bs = document.getElementById('b-sub').value; db.config.saleEnd = document.getElementById('sale-end').value;
+            db.config.promoCode = document.getElementById('p-code').value; db.config.promoAmt = document.getElementById('p-amt').value;
+            sync(); alert("Saved!"); render();
+        }
+
+        function delP(id) { if(confirm('Delete?')) { db.products = db.products.filter(p => p.id !== id); sync(); showTab('man'); render(); } }
+        function doSearch() { render(); }
+        setTimeout(() => { render(); startTimer(); }, 800);
+    </script>
+</body>
+</html>
